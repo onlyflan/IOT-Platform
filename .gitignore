@@ -1,0 +1,28 @@
+# Ignore node_modules in both back-end and front-end
+iot_be/node_modules/
+iot_fe/node_modules/
+
+# Ignore environment files (API keys, DB configs, MQTT secrets)
+iot_be/config.env
+iot_be/config.env
+iot_fe/.env
+
+# Logs
+*.log
+logs/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+
+# Build folders (React or other frontend builds)
+iot_fe/build/
+dist/
+
+# Dependency lock files (optional, if you want fresh installs)
+# iot_be/package-lock.json
+# iot_fe/package-lock.json
