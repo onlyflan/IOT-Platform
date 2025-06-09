@@ -1,21 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { Switch, Card } from "antd";
+import React, { useEffect } from "react";
+import { Switch, Card, message } from "antd";
 import { Fan, Lightbulb, Droplets, Flame, Tv } from "lucide-react";
 
-const DeviceControl = ({ devices, onChangeDevice }) => {
-  const [deviceStates, setDeviceStates] = useState({});
-
-  // Initialize device states when devices prop changes
+const DeviceControl = ({ devices, deviceStates, onChangeDevice }) => {
   useEffect(() => {
-    const initialStates = devices.reduce(
-      (acc, device) => ({ ...acc, [device.id]: false }),
-      {}
-    );
-    setDeviceStates(initialStates);
-  }, [devices]);
-
-  // Add animation styles to document head
-  React.useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
       @keyframes spin {
@@ -50,7 +38,6 @@ const DeviceControl = ({ devices, onChangeDevice }) => {
 
     let animationStyle = {};
     if (isActive) {
-      // Choose animation based on device type
       if (deviceLabel.toLowerCase().includes("quạt")) {
         animationStyle = { animation: "spin 2s linear infinite" };
       } else if (deviceLabel.toLowerCase().includes("đèn")) {
@@ -70,7 +57,6 @@ const DeviceControl = ({ devices, onChangeDevice }) => {
 
     const iconStyle = { ...baseStyle, ...animationStyle };
 
-    // Choose icon based on device type
     if (deviceLabel.toLowerCase().includes("quạt")) {
       return <Fan style={iconStyle} />;
     } else if (deviceLabel.toLowerCase().includes("đèn")) {
@@ -86,20 +72,25 @@ const DeviceControl = ({ devices, onChangeDevice }) => {
     ) {
       return <Flame style={iconStyle} />;
     } else {
-      return <Tv style={iconStyle} />; // Default icon for other devices
+      return <Tv style={iconStyle} />;
     }
   };
 
   const handleChange = (deviceId, checked) => {
-    setDeviceStates((prev) => ({ ...prev, [deviceId]: checked }));
+    message.loading({
+      content: `Đang xử lý thiết bị ${checked ? "bật" : "tắt"}...`,
+      key: deviceId,
+      duration: 1.2,
+    });
+
     onChangeDevice(deviceId, checked);
   };
 
   return (
-    <Card title="Bật / Tắt">
+    <Card title="Bật / Tắt thiết bị">
       {devices.map((device, index) => (
         <div
-          key={index}
+          key={device.id}
           style={{
             display: "flex",
             alignItems: "center",
@@ -109,11 +100,11 @@ const DeviceControl = ({ devices, onChangeDevice }) => {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            {getIcon(device.id, device.label, deviceStates[device.id])}
+            {getIcon(device.id, device.label, deviceStates?.[device.id])}
             <span>{device.label}</span>
           </div>
           <Switch
-            checked={deviceStates[device.id]}
+            checked={deviceStates?.[device.id] ?? false}
             onChange={(checked) => handleChange(device.id, checked)}
             style={{ marginLeft: 20 }}
           />

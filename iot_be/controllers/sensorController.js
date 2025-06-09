@@ -7,7 +7,7 @@ exports.getLatest = async (req, res) => {
       status: "success",
       message: "Lấy dữ liệu cảm biến mới nhất thành công",
       results: sensors.length,
-      data: sensors,
+      record: sensors,
     });
   } catch (err) {
     res.status(500).json({ status: "fail", message: err.message });
@@ -42,7 +42,7 @@ exports.getSensorData = async (req, res) => {
       message: "Lấy dữ liệu cảm biến thành công",
       count: total,
       results: sensors.length,
-      data: sensors,
+      record: sensors,
     });
   } catch (err) {
     console.error("Sensor error:", err);

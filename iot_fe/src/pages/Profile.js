@@ -1,4 +1,3 @@
-import React from "react";
 import { Row, Col } from "antd";
 import LeftProfile from "../components/LeftProfile";
 import RightProfile from "../components/RightProfile";

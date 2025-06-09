@@ -1,98 +1,111 @@
 const Device = require("../models/deviceModel");
-const pool = require("../db/database");
+const mqttClient = require("../db/mqtt_connection");
+
+const DEVICE_MAP = {
+  LED_1: { mqttKey: "led_1", label: "Đèn" },
+  LED_2: { mqttKey: "led_2", label: "Quạt" },
+  LED_3: { mqttKey: "led_3", label: "Máy Sưởi" },
+};
 
 exports.toggleDevice = async (req, res) => {
   try {
-    const { device_id, action } = req.body;
+    const { device_name, action } = req.body;
+    const mapping = DEVICE_MAP[device_name];
 
-    if (!["ON", "OFF"].includes(action)) {
+    if (!mapping || !["ON", "OFF"].includes(action)) {
       return res.status(400).json({
         status: "fail",
-        message: "Action must be either 'ON' or 'OFF'",
+        message: "Invalid device_name or action. Valid actions: ON, OFF",
       });
     }
 
-    const timestamp = new Date();
+    const mqttKey = mapping.mqttKey;
+    const expectedPayload = {
+      device_name: device_name,
+      action: action,
+    };
 
-    const vietnamTime = new Date(timestamp.getTime() + 7 * 60 * 60 * 1000);
+    // Publish lệnh điều khiển
+    const payload = JSON.stringify({
+      [mqttKey]: action === "ON" ? 1 : 0,
+    });
 
-    const formattedTimestamp = vietnamTime
-      .toISOString()
-      .slice(0, 19)
-      .replace("T", " ");
+    mqttClient.publish("device/control", payload, (err) => {
+      if (err) {
+        console.error("MQTT publish error:", err);
+        return res.status(500).json({ status: "fail", message: "MQTT error" });
+      }
 
-    const [result] = await pool.query(
-      "INSERT INTO device_history (device_id, action, timestamp) VALUES (?, ?, ?)",
-      [device_id, action, formattedTimestamp]
-    );
+      console.log(`Published MQTT to device/control: ${payload}`);
 
-    res.status(201).json({
-      status: "success",
-      message: "Device state updated successfully",
-      data: {
-        device_id,
-        action,
-        timestamp: formattedTimestamp,
-        history_id: result.insertId,
-      },
+      // Lắng nghe phản hồi từ ESP (topic: device/data)
+      const timeout = setTimeout(() => {
+        mqttClient.removeListener("message", onMessage);
+        return res.status(504).json({
+          status: "fail",
+          message: "Timeout: Không nhận được phản hồi từ thiết bị sau 10s.",
+        });
+      }, 10000); // 10s timeout
+
+      const onMessage = async (topic, message) => {
+        // console.log("MQTT message:", topic, message.toString());
+        if (topic !== "device/data") return;
+
+        try {
+          const parsed = JSON.parse(message.toString());
+
+          if (
+            parsed.device_name === expectedPayload.device_name &&
+            parsed.action === expectedPayload.action
+          ) {
+            clearTimeout(timeout);
+            mqttClient.removeListener("message", onMessage);
+
+            console.log("Xác nhận từ ESP:", parsed);
+
+            return res.status(200).json({
+              status: "success",
+              message: `Device ${device_name} toggled to ${action}`,
+            });
+          }
+        } catch (error) {
+          console.error("Lỗi parse message từ MQTT:", error);
+        }
+      };
+
+      mqttClient.on("message", onMessage);
     });
   } catch (err) {
-    res.status(400).json({ status: "fail", message: err.message });
+    console.error("toggleDevice error:", err);
+    res.status(500).json({ status: "fail", message: err.message });
   }
 };
 
 exports.getDeviceData = async (req, res) => {
   try {
-    const { page = 1, limit = 10, timestamp, dir = "asc" } = req.query;
-
-    let baseQuery = `
-      FROM device_history dh
-      JOIN devices d ON dh.device_id = d.id
-    `;
-
-    let whereClause = "";
-    let params = [];
-
-    if (timestamp) {
-      whereClause = " WHERE dh.timestamp LIKE ?";
-      params.push(`${timestamp}%`);
-    }
-
-    // Query for total count (filtered)
-    const [countResult] = await pool.query(
-      `SELECT COUNT(*) as total ${baseQuery} ${whereClause}`,
-      params
-    );
-    const total = countResult[0].total;
-
-    // Query for actual data
-    let dataQuery = `
-      SELECT 
-        dh.id, 
-        dh.device_id, 
-        dh.action, 
-        DATE_FORMAT(dh.timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp, 
-        d.device_label 
-      ${baseQuery} ${whereClause}
-      ORDER BY dh.timestamp ${dir.toUpperCase()}
-      LIMIT ? OFFSET ?
-    `;
-
-    const offset = (page - 1) * limit;
-    params.push(parseInt(limit), parseInt(offset));
-
-    const [devices] = await pool.query(dataQuery, params);
+    const { total, data } = await Device.fetchDeviceData(req.query);
 
     res.status(200).json({
       status: "success",
       message: "Device data retrieved successfully",
       count: total,
-      results: devices.length,
-      data: devices,
+      results: data.length,
+      data,
     });
   } catch (err) {
     res.status(500).json({ status: "fail", message: err.message });
   }
 };
 
-module.exports = exports;
+exports.getCurrentDeviceStates = async (_req, res) => {
+  try {
+    const data = await Device.getLatestStates();
+    res.status(200).json({
+      status: "success",
+      message: "Current device states retrieved",
+      data,
+    });
+  } catch (err) {
+    res.status(500).json({ status: "fail", message: err.message });
+  }
+};

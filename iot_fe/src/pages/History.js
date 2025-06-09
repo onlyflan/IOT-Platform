@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { Table, Input, Button, Space, Pagination, message } from "antd";
+import { Table, Input, Button, Space, message } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { get } from "../utils/request";
@@ -10,30 +10,38 @@ const HistoryPage = () => {
   const [searchDate, setSearchDate] = useState("");
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [currentPageSize, setCurrentPageSize] = useState(5);
-  const [total, setTotal] = useState(0);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+  });
   const searchInput = useRef(null);
 
   useEffect(() => {
-    fetchData();
-  }, [pageNumber, searchDate, currentPageSize]);
+    fetchData(pagination.current, pagination.pageSize);
+  }, [searchDate]);
 
-  const fetchData = async () => {
+  const fetchData = async (page = 1, pageSize = 10, sortOrder = "asc") => {
     setLoading(true);
     try {
       const timestamp = searchDate
         ? dayjs(searchDate).format("YYYY-MM-DD HH:mm:ss")
         : "";
-      const fetchData = await get(
-        `/devices/data?page=${pageNumber}&limit=${currentPageSize}&timestamp=${timestamp}&dir=asc`
+
+      const res = await get(
+        `/devices/data?page=${page}&limit=${pageSize}&timestamp=${timestamp}&dir=${sortOrder}`
       );
 
-      if (fetchData.status === "success") {
-        setTableData(fetchData.data || []);
-        setTotal(fetchData.count || 0); // Sửa tại đây để hiển thị đúng tổng dữ liệu
+      if (res.status === "success") {
+        setTableData(res.data || []);
+        setPagination((prev) => ({
+          ...prev,
+          total: res.count || 0,
+          current: page,
+          pageSize: pageSize,
+        }));
       } else {
-        message.error(fetchData.message || "Lấy dữ liệu thất bại!");
+        message.error(res.message || "Lấy dữ liệu thất bại!");
       }
     } catch (error) {
       message.error("Lỗi kết nối API!");
@@ -42,29 +50,13 @@ const HistoryPage = () => {
     setLoading(false);
   };
 
-  const handleSearch = (selectedKeys, confirm, dataIndex) => {
-    confirm();
-    setSearchText(selectedKeys[0]);
-    setSearchedColumn(dataIndex);
-  };
-
-  const handleReset = (clearFilters) => {
-    clearFilters();
-    setSearchText("");
-  };
-
-  const handleDateSearch = (value) => {
-    setSearchDate(value);
-    setPageNumber(1); // Reset to first page when searching
+  const handleTableChange = (pagination, filters, sorter) => {
+    const sortOrder = sorter.order === "descend" ? "desc" : "asc";
+    fetchData(pagination.current, pagination.pageSize, sortOrder);
   };
 
   const handleDateSearchSubmit = () => {
-    // The fetchData will be called due to the useEffect dependency on searchDate
-    setPageNumber(1); // Reset to first page when searching
-  };
-
-  const handleTableChange = (pagination, filters, sorter) => {
-    // This function is kept for future sorting functionality if needed
+    fetchData(1, pagination.pageSize); // Reset về page 1 khi tìm kiếm
   };
 
   const getColumnSearchProps = (dataIndex) => ({
@@ -113,7 +105,7 @@ const HistoryPage = () => {
       <SearchOutlined className={filtered ? "text-blue-500" : ""} />
     ),
     onFilter: (value, record) =>
-      record[dataIndex].toString().toLowerCase().includes(value.toLowerCase()),
+      record[dataIndex]?.toString().toLowerCase().includes(value.toLowerCase()),
     filterDropdownProps: {
       onOpenChange(open) {
         if (open) {
@@ -123,33 +115,40 @@ const HistoryPage = () => {
     },
   });
 
+  const handleSearch = (selectedKeys, confirm, dataIndex) => {
+    confirm();
+    setSearchText(selectedKeys[0]);
+    setSearchedColumn(dataIndex);
+  };
+
+  const handleReset = (clearFilters) => {
+    clearFilters();
+    setSearchText("");
+  };
+
   const columns = [
     {
       title: "ID",
       dataIndex: "id",
       key: "id",
-      width: "15%",
+      width: "10%",
     },
     {
       title: "Thiết Bị",
       dataIndex: "device_label",
       key: "device_label",
-      width: "30%",
-      ...getColumnSearchProps("device"),
+      width: "25%",
+      ...getColumnSearchProps("device_label"),
     },
     {
       title: "Hành Động",
       dataIndex: "action",
       key: "action",
-      width: "20%",
+      width: "15%",
       render: (text) => {
         const isOn = text === "ON";
         return (
-          <span
-            style={{
-              color: isOn ? "#52c41a" : "#ff4d4f",
-            }}
-          >
+          <span style={{ color: isOn ? "#52c41a" : "#ff4d4f" }}>
             {isOn ? "Bật" : "Tắt"}
           </span>
         );
@@ -159,28 +158,17 @@ const HistoryPage = () => {
       title: "Thời Gian",
       dataIndex: "timestamp",
       key: "timestamp",
-      width: "35%",
-      sorter: true,
-      sortDirections: ["descend", "ascend"],
+      width: "30%",
     },
   ];
-
-  const handlePageChange = (page) => {
-    setPageNumber(page);
-  };
-
-  const handlePageSizeChange = (current, size) => {
-    setCurrentPageSize(size);
-    setPageNumber(1);
-  };
 
   return (
     <div className="space-y-4">
       <div className="flex">
         <Input
-          placeholder="Nhập thời gian"
+          placeholder="Nhập thời gian (YYYY-MM-DD)"
           value={searchDate}
-          onChange={(e) => handleDateSearch(e.target.value)}
+          onChange={(e) => setSearchDate(e.target.value)}
           style={{ width: "400px", marginRight: "10px" }}
           onPressEnter={handleDateSearchSubmit}
         />
@@ -196,24 +184,16 @@ const HistoryPage = () => {
       <Table
         columns={columns}
         dataSource={tableData}
-        pagination={false}
+        pagination={{
+          ...pagination,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) =>
+            `${range[0]}-${range[1]} của ${total} bản ghi`,
+        }}
         loading={loading}
         onChange={handleTableChange}
-      />
-      <Pagination
-        style={{ marginTop: 16 }}
-        align="center"
-        pageSize={currentPageSize}
-        current={pageNumber}
-        defaultCurrent={1}
-        total={total}
-        onChange={handlePageChange}
-        showTotal={(total, range) =>
-          `${range[0]}-${range[1]} của ${total} bản ghi`
-        }
-        showSizeChanger
-        onShowSizeChange={handlePageSizeChange}
-        showQuickJumper
+        rowKey="id"
       />
     </div>
   );

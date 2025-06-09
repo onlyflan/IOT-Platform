@@ -49,7 +49,7 @@ const RightProfile = () => {
           {/* Thêm các liên kết dưới đây */}
           <div style={{ marginBottom: "16px" }}>
             <a
-              href="https://github.com/onlyflan"
+              href="https://github.com/onlyflan/IOT-Platform"
               target="_blank"
               rel="noopener noreferrer"
               style={{ marginRight: "16px" }}

@@ -26,8 +26,7 @@ const SensorDataPage = () => {
 
       if (searchValue) {
         params.keyword = searchValue;
-        params.type =
-          searchMetric === "light" ? "light_intensity" : searchMetric;
+        params.type = searchMetric;
       }
 
       const response = await axios.get(
@@ -35,10 +34,10 @@ const SensorDataPage = () => {
         { params }
       );
 
-      const apiData = response.data.data.map((item) => ({
+      const apiData = response.data.record.map((item) => ({
         ...item,
         key: item.id,
-        light: item.light_intensity,
+        light: item.light,
       }));
 
       setData(apiData);
@@ -123,6 +122,7 @@ const SensorDataPage = () => {
             { value: "temperature", label: "Nhiệt Độ" },
             { value: "humidity", label: "Độ Ẩm" },
             { value: "light", label: "Ánh Sáng" },
+            { value: "wind", label: "Tốc độ gió" },
           ]}
         />
         <Input
@@ -130,7 +130,7 @@ const SensorDataPage = () => {
           placeholder="Nhập giá trị tìm kiếm..."
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
-          onPressEnter={() => handleSearch(searchValue)} // Hỗ trợ Enter
+          onPressEnter={() => handleSearch(searchValue)}
         />
         <Button type="primary" onClick={() => handleSearch(searchValue)}>
           Tìm kiếm
@@ -144,6 +144,7 @@ const SensorDataPage = () => {
         pagination={{
           ...pagination,
           showSizeChanger: true,
+          showQuickJumper: true,
           showTotal: (total, range) =>
             `${range[0]}-${range[1]} của ${total} bản ghi`,
         }}

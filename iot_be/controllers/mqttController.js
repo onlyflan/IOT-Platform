@@ -2,57 +2,66 @@ const pool = require("../db/database");
 
 // Lưu dữ liệu cảm biến vào bảng sensor_data
 async function handleSensorData(data) {
-  const { temperature, humidity, light_intensity, timestamp } = data;
+  console.log("Received sensor data:", data);
+
+  const { temperature, humidity, light, wind, timestamp } = data;
 
   const sql = `
-    INSERT INTO sensor_data (temperature, humidity, light_intensity, timestamp)
+    INSERT INTO sensor_data (temperature, humidity, light, timestamp)
     VALUES (?, ?, ?, ?)
   `;
 
-  console.log(data);
   try {
     const [result] = await pool.execute(sql, [
       temperature,
       humidity,
-      light_intensity,
+      light,
       timestamp || new Date(),
     ]);
-    console.log("✅ Sensor data saved. ID:", result.insertId);
+    console.log("Sensor data saved. ID:", result.insertId);
   } catch (error) {
-    console.error("❌ Error saving sensor data:", error);
+    console.error("Error saving sensor data:", error);
   }
 }
 
-// Lưu trạng thái thiết bị vào device_history
+// Gọi khi nhận message từ topic 'device/data'
 async function handleDeviceData(data) {
+  console.log("Received device data:", data);
+
   const { device_name, action, timestamp } = data;
+  console.log("Device name:", device_name);
+  // Map thiết bị để có label
+  const DEVICE_LABELS = {
+    LED_1: "Đèn",
+    LED_2: "Quạt",
+    LED_3: "Máy Sưởi",
+  };
+
+  console.log("Device label name:", DEVICE_LABELS[device_name]);
+  const device_label = DEVICE_LABELS[device_name] || device_name; // fallback nếu không có trong map
+
+  const logTime =
+    timestamp ||
+    new Date(new Date().getTime() + 7 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+
+  const sql = `
+    INSERT INTO device_history (device_name, device_label, action, timestamp)
+    VALUES (?, ?, ?, ?)
+  `;
 
   try {
-    // Lấy device_id theo device_name
-    const [devices] = await pool.execute(
-      "SELECT id FROM devices WHERE device_name = ?",
-      [device_name]
-    );
-
-    if (devices.length === 0) {
-      console.warn(`⚠️ Device '${device_name}' not found in database.`);
-      return;
-    }
-
-    const device_id = devices[0].id;
-
-    const sql = `
-      INSERT INTO device_history (device_id, action, timestamp)
-      VALUES (?, ?, ?)
-    `;
-
     const [result] = await pool.execute(sql, [
-      device_id,
+      device_name,
+      device_label,
       action,
-      timestamp || new Date(),
+      logTime,
     ]);
-
-    console.log("Device history saved. ID:", result.insertId);
+    console.log(
+      `Device '${device_name}' action '${action}' logged (ID: ${result.insertId})`
+    );
   } catch (error) {
     console.error("Error saving device data:", error);
   }
